@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拼豆图纸助手</title>
+<link rel="icon" href="/assets/icons/coin.svg">
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/assets/css/index.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="bar-left">
+    <a class="logo" href="/">🧩 <span id="site-name">拼豆图纸助手</span></a>
+    <nav>
+      <a href="/" class="nav-link" data-page="home">首页</a>
+      <a href="/?page=explore" class="nav-link" data-page="explore">图纸广场</a>
+      <a href="/coin" class="nav-link" data-page="coin">金币商店</a>
+      <a href="/files" class="nav-link" data-page="files">文件下载</a>
+    </nav>
+  </div>
+  <div class="bar-right">
+    <div class="search-wrap">
+      <input id="global-search" placeholder="搜索图纸名称/描述…" autocomplete="off">
+    </div>
+    <a href="/coin" id="coin-chip" class="coin-chip hidden" title="我的金币">
+      <img id="coin-icon" src="/assets/icons/coin.svg" alt=""> <span id="my-coins">0</span>
+    </a>
+    <div id="user-chip" class="hidden">
+      <a href="/profile" class="user-btn" id="username-link"></a>
+      <a href="/" id="logout-btn" class="ghost-btn">退出</a>
+    </div>
+    <div id="guest-chip">
+      <a href="/login" class="user-btn">登录 / 注册</a>
+    </div>
+    <a href="/admin" id="admin-link" class="ghost-btn hidden">管理后台</a>
+  </div>
+</header>
+<main id="app">
+  <section id="notice-bar" class="notice-bar hidden"></section>
+  <section id="hero" class="hero">
+    <div class="hero-text">
+      <h1>发现 · 分享 · 创作<br>你的拼豆图纸</h1>
+      <p id="site-desc">汇聚全网优质拼豆图纸，支持收藏、评分与社区投稿</p>
+      <div class="hero-actions">
+        <a class="primary-btn" href="/submit">我要投稿</a>
+        <a class="ghost-btn" href="/?page=explore">浏览图纸</a>
+      </div>
+    </div>
+    <div class="hero-stats" id="hero-stats">
+      <div><b id="st-patterns">-</b><span>图纸</span></div>
+      <div><b id="st-users">-</b><span>拼友</span></div>
+      <div><b id="st-comments">-</b><span>评论</span></div>
+    </div>
+  </section>
+  <section id="category-bar" class="category-bar"></section>
+  <section class="section-head">
+    <h2 id="list-title">最新图纸</h2>
+    <div class="sort-tabs">
+      <button data-sort="new" class="active">最新</button>
+      <button data-sort="hot">热门</button>
+    </div>
+  </section>
+  <div id="pattern-grid" class="pattern-grid"></div>
+  <div class="pager" id="pager"></div>
+  <div id="empty-tip" class="empty-tip hidden">暂无图纸，快来投稿第一个吧！</div>
+</main>
+<footer id="footer">
+  <span id="footer-name">拼豆图纸助手</span> · 用爱心和耐心拼出世界 <span class="footer-uid">UID 编号：000000000001 为站长</span>
+</footer>
+
+<script src="/assets/js/common.js"></script>
+<script src="/assets/js/index.js"></script>
+</body>
+</html>
