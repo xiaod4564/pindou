@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>金币商店</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/assets/css/index.css">
+<style>
+.wrap{max-width:720px;margin:0 auto;padding:30px 20px 60px}
+.panel{background:#fff;border:1px solid #e8ebf3;border-radius:18px;padding:26px;margin-bottom:20px}
+.panel h2{margin-bottom:16px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;color:#666;margin-bottom:6px}
+.field input{width:100%;padding:10px 12px;border:1px solid #dde1ec;border-radius:10px;outline:none;font-size:14px}
+.qr-row{display:flex;gap:20px;justify-content:center;margin:16px 0}
+.qr-item{text-align:center}
+.qr-item img{width:180px;height:180px;object-fit:contain;border:1px solid #eef1f7;border-radius:12px;background:#fafbfe}
+.qr-item p{font-size:13px;color:#8a90a2;margin-top:6px}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="bar-left"><a class="logo" href="/">🧩 <span id="site-name">拼豆图纸助手</span></a></div>
+  <div class="bar-right">
+    <a href="/coin" id="coin-chip" class="coin-chip hidden"><img id="coin-icon" src="/assets/icons/coin.svg" alt=""> <span id="my-coins">0</span></a>
+    <div id="user-chip" class="hidden"><a href="/profile" class="user-btn" id="username-link"></a><a href="/" id="logout-btn" class="ghost-btn">退出</a></div>
+    <div id="guest-chip"><a href="/login" class="user-btn">登录 / 注册</a></div>
+  </div>
+</header>
+<div class="wrap" id="app-body">
+  <div class="panel">
+    <h2>💰 购买 <span class="cn">金币</span></h2>
+    <p id="coin-tip" style="color:#666;font-size:14px;margin-bottom:16px">扫码付款后，填写商户订单号提交，管理员审核通过后自动到账。</p>
+    <div class="qr-row">
+      <div class="qr-item"><img id="qr-wechat" src="/assets/icons/placeholder.svg"><p>微信收款码</p></div>
+      <div class="qr-item"><img id="qr-alipay" src="/assets/icons/placeholder.svg"><p>支付宝收款码</p></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>提交订单</h2>
+    <div class="field"><label>购买数量</label><input id="od-coins" type="number" min="1" placeholder="例如 100"></div>
+    <div class="field"><label>商户订单号（付款后填写）</label><input id="od-no" placeholder="微信/支付宝账单里的商户订单号"></div>
+    <div class="field"><label>优惠码（选填）</label><input id="od-coupon" placeholder="有优惠码可减钱"></div>
+    <button class="primary-btn" id="btn-order" style="width:100%">提交订单</button>
+  </div>
+  <div class="panel">
+    <h2>兑换激活码</h2>
+    <div class="field"><label>激活码</label><input id="rd-code" placeholder="例如 PDAB12CD34"></div>
+    <button class="primary-btn" id="btn-redeem" style="width:100%">立即兑换</button>
+  </div>
+  <div class="panel">
+    <h2>我的订单</h2>
+    <table class="mini-table" id="tb-orders" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th style="padding:8px;text-align:left">商户订单号</th><th style="padding:8px;text-align:left">数量</th><th style="padding:8px;text-align:left">状态</th><th style="padding:8px;text-align:left">时间</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+<script src="/assets/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+async function load() {
+  const s = await API('/coin/qr');
+  if (s.ok) {
+    document.querySelector('.cn').textContent = s.coin_name || '金币';
+    if (s.wechat) $('qr-wechat').src = s.wechat;
+    if (s.alipay) $('qr-alipay').src = s.alipay;
+    if (s.wechat && s.alipay) $('coin-tip').textContent = '扫码付款后，填写商户订单号提交，管理员审核通过后自动到账。';
+  }
+  if (ME) {
+    const od = await API('/orders/my');
+    $('tb-orders').querySelector('tbody').innerHTML = (od.list || []).map(o =>
+      `<tr><td style="padding:8px">${esc(o.merchant_no)}</td><td style="padding:8px">+${o.coins}</td><td style="padding:8px">${o.status === 'pending' ? '⏳ 待审核' : o.status === 'approved' ? '✅ 已通过' : '❌ 已驳回'}</td><td style="padding:8px">${fmtTime(o.created_at)}</td></tr>`).join('') || '<tr><td colspan="4" style="color:#aaa;padding:8px">暂无订单</td></tr>';
+  } else {
+    $('btn-order').onclick = () => toast('请先登录', 1);
+    $('btn-redeem').onclick = () => toast('请先登录', 1);
+  }
+}
+$('btn-order').onclick = async () => {
+  if (!ME) return location.href = '/login';
+  const r = await API('/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ merchant_no: $('od-no').value.trim(), coins: Number($('od-coins').value), coupon: $('od-coupon').value.trim() }) });
+  if (r.ok) { toast(r.msg || '订单已提交'); load(); } else toast(r.msg, 1);
+};
+$('btn-redeem').onclick = async () => {
+  if (!ME) return location.href = '/login';
+  const r = await API('/coin/redeem?code=' + encodeURIComponent($('rd-code').value.trim()));
+  if (r.ok) { toast(r.msg); loadCommon(); } else toast(r.msg, 1);
+};
+loadCommon().then(load);
+</script>
+</body>
+</html>
