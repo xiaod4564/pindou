@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人中心</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/assets/css/index.css">
+<style>
+.wrap{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+.panel{background:#fff;border:1px solid #e8ebf3;border-radius:16px;padding:24px;margin-bottom:20px}
+.panel h3{margin-bottom:16px;font-size:17px}
+.uid-badge{display:inline-block;background:linear-gradient(120deg,var(--theme-color),#7a5cff);color:#fff;padding:8px 18px;border-radius:12px;font-weight:800;letter-spacing:2px;font-size:16px}
+.field{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.field label{width:90px;color:#666;font-size:14px;flex-shrink:0}
+.field input{flex:1;padding:10px 12px;border:1px solid #dde1ec;border-radius:10px;outline:none;font-size:14px}
+.field input:focus{border-color:var(--theme-color)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.mini-table{width:100%;border-collapse:collapse;font-size:13px}
+.mini-table th,.mini-table td{padding:9px 10px;border-bottom:1px solid #eef1f7;text-align:left}
+.mini-table th{color:#8a90a2;font-weight:600}
+.stars-big{display:flex;gap:4px}
+.stars-big img{width:30px;height:30px;cursor:pointer;transition:.12s}
+.stars-big img:hover{transform:scale(1.15)}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="bar-left"><a class="logo" href="/">🧩 <span id="site-name">拼豆图纸助手</span></a></div>
+  <div class="bar-right">
+    <a href="/coin" id="coin-chip" class="coin-chip hidden"><img id="coin-icon" src="/assets/icons/coin.svg" alt=""> <span id="my-coins">0</span></a>
+    <div id="user-chip" class="hidden"><a href="/profile" class="user-btn" id="username-link"></a><a href="/" id="logout-btn" class="ghost-btn">退出</a></div>
+    <div id="guest-chip"><a href="/login" class="user-btn">登录 / 注册</a></div>
+  </div>
+</header>
+<div class="wrap" id="app-body">
+  <div id="need-login" class="hidden" style="text-align:center;padding:80px 0">
+    <p style="margin-bottom:16px;color:#8a90a2">请先登录后查看个人中心</p>
+    <a class="user-btn" href="/login">去登录</a>
+  </div>
+  <div id="panel-me" class="hidden">
+    <div class="panel" style="text-align:center">
+      <h2 id="me-name"></h2>
+      <div style="margin:12px 0">UID <span class="uid-badge" id="me-uid"></span></div>
+      <div id="me-role" style="color:#8a90a2;font-size:13px"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>资料修改</h3>
+        <div class="field"><label>邮箱</label><input id="pf-email"></div>
+        <div class="field"><label>手机号</label><input id="pf-phone"></div>
+        <button class="primary-btn" id="btn-save-profile">保存资料</button>
+      </div>
+      <div class="panel">
+        <h3>修改密码</h3>
+        <div class="field"><label>原密码</label><input id="pw-old" type="password"></div>
+        <div class="field"><label>新密码</label><input id="pw-new" type="password"></div>
+        <button class="primary-btn" id="btn-save-pw">修改密码</button>
+        <div id="pf-msg" style="color:#3a3;font-size:13px;margin-top:8px;min-height:16px"></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>我的图纸</h3>
+        <table class="mini-table" id="tb-my-patterns"><thead><tr><th>名称</th><th>状态</th><th>评分</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="panel">
+        <h3>我的收藏</h3>
+        <table class="mini-table" id="tb-favs"><thead><tr><th>名称</th><th>分类</th><th>评分</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+    <div class="panel" id="panel-orders">
+      <h3>我的金币订单</h3>
+      <table class="mini-table" id="tb-orders"><thead><tr><th>商户订单号</th><th>数量</th><th>状态</th><th>提交时间</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</div>
+<script src="/assets/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+async function load() {
+  const me = await API('/auth/me');
+  if (!me.ok || !me.user) { $('need-login').classList.remove('hidden'); return; }
+  ME = me.user; window.COIN_NAME = me.coin_name;
+  $('panel-me').classList.remove('hidden');
+  $('me-name').textContent = ME.username;
+  $('me-uid').textContent = ME.uid;
+  $('me-role').textContent = (ME.role === 'admin' ? '管理员' : '普通用户') + ' · 注册于 ' + fmtTime(ME.created_at);
+  $('pf-email').value = ME.email || ''; $('pf-phone').value = ME.phone || '';
+  const [mp, fv, od] = await Promise.all([API('/me/patterns'), API('/me/favorites'), API('/orders/my')]);
+  const statusName = { published: '✅ 已发布', pending: '⏳ 待审核', rejected: '❌ 未通过' };
+  $('tb-my-patterns').querySelector('tbody').innerHTML = (mp.list || []).map(p =>
+    `<tr><td><a href="/pattern?id=${p.id}">${esc(p.title)}</a></td><td>${statusName[p.status] || p.status}</td><td>${p.rating.n ? p.rating.avg.toFixed(1) : '—'}</td></tr>`).join('') || '<tr><td colspan="3" style="color:#aaa">还没有投稿图纸</td></tr>';
+  $('tb-favs').querySelector('tbody').innerHTML = (fv.list || []).map(p =>
+    `<tr><td><a href="/pattern?id=${p.id}">${esc(p.title)}</a></td><td>${esc(p.category)}</td><td>${p.rating.n ? p.rating.avg.toFixed(1) : '—'}</td></tr>`).join('') || '<tr><td colspan="3" style="color:#aaa">暂无收藏</td></tr>';
+  $('tb-orders').querySelector('tbody').innerHTML = (od.list || []).map(o =>
+    `<tr><td>${esc(o.merchant_no)}</td><td>+${o.coins}</td><td>${o.status === 'pending' ? '⏳ 待审核' : o.status === 'approved' ? '✅ 已通过' : '❌ 已驳回'}</td><td>${fmtTime(o.created_at)}</td></tr>`).join('') || '<tr><td colspan="4" style="color:#aaa">暂无订单</td></tr>';
+}
+$('btn-save-profile').onclick = async () => {
+  const r = await API('/me/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('pf-email').value.trim(), phone: $('pf-phone').value.trim() }) });
+  if (r.ok) { toast('资料已保存'); load(); } else toast(r.msg, 1);
+};
+$('btn-save-pw').onclick = async () => {
+  const r = await API('/me/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ old_password: $('pw-old').value, new_password: $('pw-new').value }) });
+  if (r.ok) { $('pf-msg').textContent = '✅ 密码已修改'; $('pw-old').value = ''; $('pw-new').value = ''; } else { $('pf-msg').textContent = r.msg; $('pf-msg').style.color = '#d33'; }
+};
+loadCommon(); load();
+</script>
+</body>
+</html>
