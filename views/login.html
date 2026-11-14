@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 / 注册</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/assets/css/index.css">
+<style>
+.auth-wrap{min-height:calc(100vh - 64px);display:flex;align-items:center;justify-content:center;padding:24px}
+.auth-card{background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:36px;width:400px;max-width:96vw}
+.auth-card h2{margin-bottom:6px}
+.auth-card .sub{color:#8a90a2;font-size:13px;margin-bottom:22px}
+.auth-card input{width:100%;padding:11px 14px;border:1px solid #dde1ec;border-radius:12px;margin-bottom:12px;font-size:14px;outline:none}
+.auth-card input:focus{border-color:var(--theme-color)}
+.auth-card label{font-size:13px;color:#666;display:block;margin-bottom:6px}
+.captcha-row{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.captcha-row input{margin-bottom:0;flex:1}
+.captcha-img{width:120px;height:42px;cursor:pointer;border-radius:8px;overflow:hidden;flex-shrink:0}
+.captcha-img svg{width:100%;height:100%}
+.primary-btn{width:100%;margin-top:8px;background:var(--theme-color);color:#fff;border:none}
+.auth-tabs{display:flex;gap:10px;margin-bottom:20px}
+.auth-tabs button{flex:1;padding:9px;border:1px solid #dde1ec;background:#fff;border-radius:12px;cursor:pointer;font-size:14px;color:#666}
+.auth-tabs button.active{background:var(--theme-color);border-color:var(--theme-color);color:#fff}
+.auth-switch{text-align:center;font-size:13px;color:#8a90a2;margin-top:16px;cursor:pointer}
+.form-msg{color:#d33;font-size:13px;margin-top:10px;min-height:18px;text-align:center}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="bar-left"><a class="logo" href="/">🧩 <span id="site-name">拼豆图纸助手</span></a></div>
+</header>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button id="tab-login" class="active">登 录</button>
+      <button id="tab-register">注 册</button>
+    </div>
+    <div id="form-login">
+      <input id="li-account" placeholder="用户名 / 邮箱 / 手机号" autocomplete="username">
+      <input id="li-password" type="password" placeholder="密码" autocomplete="current-password">
+      <button class="primary-btn" id="btn-login">登 录</button>
+      <div class="auth-switch" id="forgot-link">忘记密码？密保找回</div>
+    </div>
+    <div id="form-register" class="hidden">
+      <input id="rg-username" placeholder="用户名">
+      <input id="rg-email" placeholder="邮箱（与手机号至少填一项）">
+      <input id="rg-phone" placeholder="手机号（与邮箱至少填一项）">
+      <input id="rg-password" type="password" placeholder="密码（至少 6 位）">
+      <input id="rg-sq" placeholder="密保问题，例如：你的宠物名字？">
+      <input id="rg-sa" placeholder="密保答案">
+      <button class="primary-btn" id="btn-register">注 册</button>
+    </div>
+    <div id="form-forgot" class="hidden">
+      <input id="fg-account" placeholder="用户名 / 邮箱 / 手机号">
+      <input id="fg-sa" placeholder="密保答案">
+      <input id="fg-new" type="password" placeholder="新密码（至少 6 位）">
+      <button class="primary-btn" id="btn-forgot">重置密码</button>
+      <div class="auth-switch" id="back-login">返回登录</div>
+    </div>
+    <div class="form-msg" id="auth-msg"></div>
+  </div>
+</div>
+<script src="/assets/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const msg = m => { $('auth-msg').textContent = m || ''; };
+function switchTab(t) {
+  $('form-login').classList.toggle('hidden', t !== 'login');
+  $('form-register').classList.toggle('hidden', t !== 'register');
+  $('form-forgot').classList.toggle('hidden', t !== 'forgot');
+  $('tab-login').classList.toggle('active', t === 'login');
+  $('tab-register').classList.toggle('active', t === 'register');
+  msg('');
+}
+$('tab-login').onclick = () => switchTab('login');
+$('tab-register').onclick = () => switchTab('register');
+$('forgot-link').onclick = () => switchTab('forgot');
+$('back-login').onclick = () => switchTab('login');
+
+$('btn-login').onclick = async () => {
+  msg('');
+  const r = await API('/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account: $('li-account').value.trim(), password: $('li-password').value }) });
+  if (!r.ok) { msg(r.msg); return; }
+  location.href = r.role === 'admin' ? '/admin' : '/';
+};
+$('btn-register').onclick = async () => {
+  msg('');
+  const r = await API('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: $('rg-username').value.trim(), email: $('rg-email').value.trim(), phone: $('rg-phone').value.trim(), password: $('rg-password').value, security_question: $('rg-sq').value.trim(), security_answer: $('rg-sa').value.trim() }) });
+  if (!r.ok) { msg(r.msg); return; }
+  toast('注册成功！你的 UID：' + r.uid);
+  setTimeout(() => location.href = '/profile', 1200);
+};
+let verified = false;
+$('btn-forgot').onclick = async () => {
+  msg('');
+  const account = $('fg-account').value.trim(), answer = $('fg-sa').value.trim(), np = $('fg-new').value;
+  if (!np) { msg('请填写新密码'); return; }
+  if (!verified) {
+    const r = await API('/auth/verify_security', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account, answer }) });
+    if (!r.ok) { msg(r.msg); return; }
+    verified = true;
+    toast('密保验证通过，请设置新密码');
+  }
+  const r2 = await API('/auth/reset_password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: np }) });
+  if (!r2.ok) { msg(r2.msg); return; }
+  toast('密码已重置，请登录');
+  verified = false;
+  switchTab('login');
+};
+switchTab('login');
+loadCommon();
+</script>
+</body>
+</html>
