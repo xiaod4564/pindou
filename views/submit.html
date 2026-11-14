@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投稿图纸</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/assets/css/index.css">
+<style>
+.wrap{max-width:640px;margin:0 auto;padding:30px 20px 60px}
+.panel{background:#fff;border:1px solid #e8ebf3;border-radius:18px;padding:28px}
+.panel h2{margin-bottom:20px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13px;color:#666;margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid #dde1ec;border-radius:10px;outline:none;font-size:14px;font-family:inherit}
+.field textarea{min-height:90px;resize:vertical}
+.cover-drop{border:2px dashed #ccd2e0;border-radius:12px;padding:26px;text-align:center;color:#8a90a2;cursor:pointer;transition:.15s}
+.cover-drop:hover{border-color:var(--theme-color);color:var(--theme-color)}
+.cover-preview{max-height:180px;border-radius:10px;margin-top:10px;display:none}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.price-row{display:none;align-items:center;gap:10px}
+.tip{font-size:12px;color:#9aa1b5;margin-top:4px}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="bar-left"><a class="logo" href="/">🧩 <span id="site-name">拼豆图纸助手</span></a></div>
+  <div class="bar-right">
+    <div id="user-chip" class="hidden"><a href="/profile" class="user-btn" id="username-link"></a><a href="/" id="logout-btn" class="ghost-btn">退出</a></div>
+    <div id="guest-chip"><a href="/login" class="user-btn">登录 / 注册</a></div>
+  </div>
+</header>
+<div class="wrap">
+  <div id="need-login" class="empty-tip">请先 <a href="/login" style="color:var(--theme-color)">登录</a> 后投稿</div>
+  <div id="form-panel" class="panel hidden">
+    <h2>📤 投稿图纸</h2>
+    <div class="field"><label>封面图（点击上传，必填）</label>
+      <div class="cover-drop" id="cover-drop">点击选择图片（JPG/PNG/WebP，≤20MB）</div>
+      <img class="cover-preview" id="cover-preview">
+    </div>
+    <div class="field"><label>图纸原图（可选，用于生成像素网格；不传则使用封面图）</label>
+      <div class="cover-drop" id="img-drop">点击选择图纸原图</div>
+      <img class="cover-preview" id="img-preview">
+    </div>
+    <div class="field"><label>图纸名称 *</label><input id="pt-title" placeholder="例如：皮卡丘挂件"></div>
+    <div class="field"><label>描述</label><textarea id="pt-desc" placeholder="介绍一下这张图纸…"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>分类 *</label><select id="pt-cat"><option value="">加载中…</option></select></div>
+      <div class="field"><label>难度</label><select id="pt-diff"><option value="easy">简单</option><option value="medium">中等</option><option value="hard">困难</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>网格宽度（像素数，可选）</label><input id="pt-w" type="number" min="1" placeholder="如 29"></div>
+      <div class="field"><label>网格高度（像素数，可选）</label><input id="pt-h" type="number" min="1" placeholder="如 29"></div>
+    </div>
+    <div class="field"><label>外链原图 URL（选填，可以不填）</label><input id="pt-url" placeholder="https://…"></div>
+    <div class="field price-row" id="price-field">
+      <label>是否收费</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="pt-paid" style="width:auto"> 收费图纸</label>
+      <input type="number" id="pt-price" min="0" placeholder="金币数量" style="width:120px;display:none">
+    </div>
+    <button class="primary-btn" id="btn-submit" style="width:100%">提交投稿</button>
+    <p class="tip" style="text-align:center;margin-top:10px">提交后进入待审核，管理员审核通过后将在前台展示</p>
+  </div>
+</div>
+<script src="/assets/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let coverData = null, imgData = null, coverName = '', imgName = '';
+
+function bindDrop(dropId, prevId, cb) {
+  const drop = $(dropId);
+  drop.onclick = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = async () => {
+      const f = inp.files[0];
+      if (!f) return;
+      if (f.size > 20 * 1024 * 1024) return toast('图片过大（≤20MB）', 1);
+      try {
+        const r = await uploadImage(f, 'covers');
+        cb(r, f.name);
+        $(prevId).src = r.url;
+        $(prevId).style.display = 'block';
+        drop.textContent = '✅ 已选择：' + f.name + '（点击可更换）';
+      } catch (e) { toast(e.message, 1); }
+    };
+    inp.click();
+  };
+}
+bindDrop('cover-drop', 'cover-preview', (r, name) => { coverData = r; coverName = name; });
+bindDrop('img-drop', 'img-preview', (r, name) => { imgData = r; imgName = name; });
+
+async function loadCats() {
+  const r = await API('/categories');
+  if (r.ok) $('pt-cat').innerHTML = `<option value="">请选择分类</option>` + r.list.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+}
+$('pt-paid').addEventListener('change', () => { $('pt-price').style.display = $('pt-paid').checked ? 'block' : 'none'; });
+
+$('btn-submit').onclick = async () => {
+  const title = $('pt-title').value.trim();
+  if (!title) return toast('请填写图纸名称', 1);
+  if (!coverData) return toast('请上传封面图', 1);
+  const cat = $('pt-cat').value;
+  if (!cat) return toast('请选择分类', 1);
+  const body = {
+    title, description: $('pt-desc').value.trim(), category_id: Number(cat),
+    difficulty: $('pt-diff').value, cover: coverData.url,
+    image: (imgData ? imgData.url : coverData.url),
+    original_url: $('pt-url').value.trim(),
+    width: Number($('pt-w').value) || 0, height: Number($('pt-h').value) || 0,
+    price: $('pt-paid').checked ? Number($('pt-price').value) : 0
+  };
+  const r = await API('/patterns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (r.ok) { toast(ME && ME.role === 'admin' ? '发布成功！' : '投稿成功，等待审核'); setTimeout(() => location.href = '/profile', 1200); }
+  else toast(r.msg, 1);
+};
+
+(async () => {
+  await loadCommon();
+  if (ME) {
+    $('need-login').classList.add('hidden');
+    $('form-panel').classList.remove('hidden');
+    if (ME.role === 'admin') $('price-field').classList.remove('price-row');
+    loadCats();
+  }
+})();
+</script>
+</body>
+</html>
