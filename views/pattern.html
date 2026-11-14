@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图纸详情</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/assets/css/index.css">
+<style>
+.detail-wrap{max-width:1100px;margin:0 auto;padding:26px 20px 80px}
+.detail-head{display:flex;gap:26px;align-items:flex-start;background:#fff;border:1px solid #e8ebf3;border-radius:18px;padding:22px}
+.detail-cover{width:280px;height:220px;border-radius:14px;overflow:hidden;background:#eef1f7;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.detail-cover img{width:100%;height:100%;object-fit:cover}
+.detail-info{flex:1}
+.detail-info h1{font-size:24px;margin-bottom:10px}
+.detail-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.detail-tags .tag{background:#f0f3fa;color:#5a6172;padding:4px 12px;border-radius:12px;font-size:13px}
+.detail-desc{color:#666;font-size:14px;line-height:1.8;margin-bottom:14px}
+.rating-line{font-size:15px;color:#333;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.rating-line b{font-size:22px}
+.rating-line img{width:22px;height:22px}
+.rate-box{display:flex;gap:4px;align-items:center;margin-top:10px}
+.rate-box img{width:26px;height:26px;cursor:pointer;transition:.1s}
+.rate-box img:hover{transform:scale(1.2)}
+.detail-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.btn{padding:10px 22px;border-radius:12px;border:1px solid #dde1ec;background:#fff;cursor:pointer;font-size:14px}
+.btn.primary{background:var(--theme-color);color:#fff;border-color:var(--theme-color)}
+.view-tabs{display:flex;gap:10px;margin:20px 0 12px}
+.view-tabs button{padding:9px 20px;border-radius:12px;border:1px solid #dde1ec;background:#fff;cursor:pointer;font-size:14px}
+.view-tabs button.active{background:var(--theme-color);color:#fff;border-color:var(--theme-color)}
+.pixel-toolbar{display:flex;gap:16px;align-items:center;background:#fff;border:1px solid #e8ebf3;padding:10px 16px;border-radius:12px;margin-bottom:12px;font-size:13px;flex-wrap:wrap}
+.pixel-wrap{background:#fff;border:1px solid #e8ebf3;border-radius:14px;padding:14px;overflow:auto;max-height:70vh}
+.pixel-grid{display:grid;gap:1px;width:max-content}
+.px{width:22px;height:22px;position:relative;background:#fff}
+.px-cell{position:absolute;inset:0}
+.px-tip{position:fixed;z-index:99;background:rgba(20,22,30,.92);color:#fff;padding:6px 12px;border-radius:8px;font-size:13px;pointer-events:none;display:none}
+.px-tip b{color:#ffd75e}
+.comments-panel{background:#fff;border:1px solid #e8ebf3;border-radius:16px;padding:22px;margin-top:20px}
+.comment-item{padding:12px 0;border-bottom:1px solid #f0f2f8;display:flex;gap:12px}
+.c-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(120deg,var(--theme-color),#9a6bff);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+.c-body{flex:1}
+.c-head{font-size:13px;color:#8a90a2;display:flex;gap:10px;align-items:center}
+.c-head b{color:#333;font-size:14px}
+.c-uid{background:#f0f3fa;padding:1px 8px;border-radius:8px}
+.c-content{margin-top:5px;font-size:14px;line-height:1.7}
+.c-input-row{display:flex;gap:10px;margin-bottom:14px}
+.c-input-row textarea{flex:1;padding:10px 12px;border:1px solid #dde1ec;border-radius:10px;outline:none;resize:vertical;min-height:60px;font-family:inherit}
+@media(max-width:820px){.detail-head{flex-direction:column}.detail-cover{width:100%;height:240px}}
+.lock-box{text-align:center;padding:60px 20px;background:#fff;border:1px solid #e8ebf3;border-radius:16px;margin-top:20px}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="bar-left"><a class="logo" href="/">🧩 <span id="site-name">拼豆图纸助手</span></a></div>
+  <div class="bar-right">
+    <a href="/coin" id="coin-chip" class="coin-chip hidden"><img id="coin-icon" src="/assets/icons/coin.svg" alt=""> <span id="my-coins">0</span></a>
+    <div id="user-chip" class="hidden"><a href="/profile" class="user-btn" id="username-link"></a><a href="/" id="logout-btn" class="ghost-btn">退出</a></div>
+    <div id="guest-chip"><a href="/login" class="user-btn">登录 / 注册</a></div>
+  </div>
+</header>
+<div class="detail-wrap" id="detail-app"></div>
+<div class="px-tip" id="px-tip"></div>
+<script src="/assets/js/common.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const pid = qs.get('id');
+let P = null;
+let COINNAME = '金币';
+
+function diffName(d) { return { easy: '简单', medium: '中等', hard: '困难' }[d] || d; }
+function ratingLineHtml(r) {
+  if (!r.n) return `<div class="rating-line"><b>—</b><span>暂无评分</span></div>`;
+  return `<div class="rating-line"><b>${r.avg.toFixed(1)}</b><span>/ 5 · ${r.n} 人评价</span><span>${starsHtml(r.avg, window.STAR_IMG)}</span></div>`;
+}
+
+async function loadDetail() {
+  const r = await API('/patterns/' + pid);
+  if (!r.ok) { $('detail-app').innerHTML = `<div class="empty-tip">${esc(r.msg || '图纸不存在')}</div><div style="text-align:center"><a class="user-btn" href="/">返回首页</a></div>`; return; }
+  P = r.pattern;
+  const s = await API('/site');
+  if (s.ok) COINNAME = s.coin_name || COINNAME;
+  renderHead(); renderComments();
+}
+
+function renderHead() {
+  const p = P;
+  const canFav = !!ME;
+  let actions = '';
+  if (ME) {
+    actions += `<button class="btn" id="btn-fav">${p.favorited ? '★ 已收藏' : '☆ 收藏'}</button>`;
+    if (p.need_pay) actions += `<button class="btn primary" id="btn-buy">解锁图纸（${COINNAME} ${p.price}）</button>`;
+    else actions += `<button class="btn primary" id="btn-zip">下载图纸包</button>`;
+  } else {
+    actions += `<a class="btn primary" href="/login">登录后下载/收藏</a>`;
+  }
+  const payNote = (SITE && SITE.coins_enabled && p.price > 0 && !p.unlocked) ? `<div class="detail-tags"><span class="tag">🔒 需 ${p.price} ${COINNAME} 解锁</span></div>` : '';
+  $('detail-app').innerHTML = `
+    <div class="detail-head">
+      <div class="detail-cover"><img src="${esc(p.cover || '/assets/icons/placeholder.svg')}" onerror="this.src='/assets/icons/placeholder.svg'"></div>
+      <div class="detail-info">
+        <h1>${esc(p.title)}</h1>
+        <div class="detail-tags">
+          ${p.category_name ? `<span class="tag">📁 ${esc(p.category_name)}</span>` : ''}
+          <span class="tag">难度：${diffName(p.difficulty)}</span>
+          <span class="tag">👁 ${p.views} 次浏览</span>
+          <span class="tag">UID ${esc(p.author_uid)} · ${esc(p.author_name)}</span>
+          <span class="tag">${fmtTime(p.created_at)}</span>
+        </div>
+        ${payNote}
+        <div class="detail-desc">${esc(p.description || '暂无描述')}</div>
+        ${ratingLineHtml(p.rating)}
+        <div class="rate-box" id="rate-box"></div>
+        <div class="detail-actions">${actions}</div>
+      </div>
+    </div>
+    <div id="view-area"></div>
+    <div class="comments-panel">
+      <h3 style="margin-bottom:14px">评论（<span id="c-count">0</span>）</h3>
+      <div id="c-form"></div>
+      <div id="c-list"></div>
+    </div>`;
+  if (ME) renderRateBox(p.my_rating);
+  if (ME) {
+    $('btn-fav').onclick = async () => {
+      const r = await API(`/patterns/${p.id}/favorite`, { method: 'POST' });
+      if (r.ok) { p.favorited = r.favorited; $('btn-fav').textContent = r.favorited ? '★ 已收藏' : '☆ 收藏'; toast(r.favorited ? '已收藏' : '已取消收藏'); }
+      else toast(r.msg, 1);
+    };
+    if (p.need_pay) $('btn-buy').onclick = buyPattern;
+    else $('btn-zip').onclick = () => downloadZip();
+  }
+  renderViews();
+}
+
+function renderRateBox(myScore) {
+  const box = $('rate-box');
+  if (!box) return;
+  box.innerHTML = `<span style="font-size:13px;color:#8a90a2;margin-right:6px">我来评分：</span>` +
+    [1,2,3,4,5].map(i => `<img data-s="${i}" style="opacity:${i <= (myScore || 0) ? 1 : .25}" src="${esc(window.STAR_IMG || '/assets/icons/star.png')}">`).join('');
+  box.querySelectorAll('img').forEach(img => img.onclick = async () => {
+    const s = Number(img.dataset.s);
+    const r = await API(`/patterns/${P.id}/rate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: s }) });
+    if (r.ok) { toast('评分成功'); P.rating = r.rating; renderHead(); renderViews(); }
+    else toast(r.msg, 1);
+  });
+}
+
+async function buyPattern() {
+  const r = await API(`/patterns/${P.id}/buy`, { method: 'POST' });
+  if (r.ok) { toast('解锁成功'); loadDetail(); if (ME) { const me = await API('/auth/me'); if (me.ok && me.user) { ME = me.user; const mc = $('my-coins'); if (mc) mc.textContent = ME.coins; } } }
+  else toast(r.msg, 1);
+}
+
+async function renderViews() {
+  const area = $('view-area');
+  if (P.need_pay) {
+    area.innerHTML = `<div class="lock-box"><h3>🔒 该图纸为付费图纸</h3><p style="color:#888;margin:12px 0">解锁后可查看高清原图和像素网格</p><button class="btn primary" onclick="buyPattern()">立即解锁（${COINNAME} ${P.price}）</button></div>`;
+    return;
+  }
+  area.innerHTML = `
+    <div class="view-tabs">
+      <button id="vt-hd" class="active">高清原图</button>
+      <button id="vt-grid">像素网格</button>
+      ${P.original_url ? `<a class="btn" href="${esc(P.original_url)}" target="_blank" style="padding:9px 20px">外链原图 ↗</a>` : ''}
+    </div>
+    <div id="view-box"></div>`;
+  $('vt-hd').onclick = () => showHd();
+  $('vt-grid').onclick = () => showGrid();
+  showHd();
+}
+
+function showHd() {
+  $('vt-hd').classList.add('active'); $('vt-grid').classList.remove('active');
+  const img = P.image ? `/api/patterns/${P.id}/image?_=${Date.now()}` : (P.original_url || '');
+  $('view-box').innerHTML = `<div class="pixel-wrap" style="text-align:center"><img id="hd-img" src="${esc(img)}" style="max-width:100%;border-radius:10px" onerror="this.parentElement.innerHTML='<p style=\\'color:#999\\'>该图纸暂无图片</p>'">
+  <p style="color:#999;font-size:12px;margin-top:8px">${P.width ? `原图 ${P.width}×${P.height} · 共 ${P.width * P.height} 颗豆` : ''}</p></div>`;
+}
+
+function showGrid() {
+  $('vt-grid').classList.add('active'); $('vt-hd').classList.remove('active');
+  const box = $('view-box');
+  if (!P.width || !P.height) { box.innerHTML = `<div class="pixel-wrap" style="text-align:center;color:#999;padding:40px">该图纸缺少网格尺寸信息，暂无法生成像素网格</div>`; return; }
+  box.innerHTML = `
+    <div class="pixel-toolbar">
+      <span>🖱 悬停查看色号</span>
+      <label>格子大小 <input id="px-size" type="range" min="10" max="40" value="22" style="vertical-align:middle"></label>
+      <label><input id="px-code" type="checkbox"> 显示色号</label>
+      <span style="color:#999">总计 ${P.width}×${P.height} = ${P.width * P.height} 颗</span>
+    </div>
+    <div class="pixel-wrap"><div class="pixel-grid" id="px-grid"></div></div>`;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => drawGrid(img);
+  img.onerror = () => { box.innerHTML = `<div class="pixel-wrap" style="text-align:center;color:#999;padding:40px">图片加载失败</div>`; };
+  img.src = `/api/patterns/${P.id}/image?_=${Date.now()}`;
+}
+
+function mardCode(r, g, b) {
+  const palette = [
+    ['A', [255, 255, 255]], ['B', [230, 230, 230]], ['C', [200, 200, 200]], ['D', [150, 150, 150]], ['E', [100, 100, 100]], ['F', [60, 60, 60]], ['G', [20, 20, 20]],
+    ['H', [255, 100, 100]], ['I', [230, 40, 40]], ['J', [180, 20, 20]], ['K', [255, 160, 120]], ['L', [255, 120, 30]], ['M', [230, 80, 10]],
+    ['N', [255, 220, 80]], ['O', [250, 190, 20]], ['P', [230, 150, 20]], ['Q', [180, 230, 80]], ['R', [120, 200, 40]], ['S', [60, 160, 30]],
+    ['T', [140, 220, 220]], ['U', [60, 190, 190]], ['V', [20, 140, 150]], ['W', [140, 180, 255]], ['X', [60, 120, 240]], ['Y', [30, 70, 200]],
+    ['Z', [200, 140, 255]], ['a', [150, 80, 220]], ['b', [90, 40, 160]], ['c', [255, 180, 200]], ['d', [240, 110, 160]], ['e', [180, 50, 120]]
+  ];
+  let best = 'A', bestD = Infinity;
+  for (const [code, [pr, pg, pb]] of palette) {
+    const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+    if (d < bestD) { bestD = d; best = code; }
+  }
+  return best + String((bestD % 20) + 1);
+}
+
+function drawGrid(img) {
+  const cv = document.createElement('canvas');
+  const W = P.width, H = P.height;
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, W, H);
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const grid = $('px-grid');
+  if (!grid) return;
+  grid.style.gridTemplateColumns = `repeat(${W}, var(--px, 22px))`;
+  const showCodes = $('px-code');
+  const sizeInput = $('px-size');
+  const tip = $('px-tip');
+  const codes = new Map();
+  let html = '';
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+      const color = a < 40 ? '#ffffff' : `rgb(${r},${g},${b})`;
+      const code = a < 40 ? '' : mardCode(r, g, b);
+      if (code) codes.set(code, color);
+      html += `<div class="px" data-x="${x}" data-y="${y}" data-code="${esc(code)}"><div class="px-cell" style="background:${color}"></div></div>`;
+    }
+  }
+  grid.innerHTML = html;
+  const apply = () => {
+    const px = Number(sizeInput.value);
+    grid.style.setProperty('--px', px + 'px');
+    grid.querySelectorAll('.px').forEach(cell => {
+      let c = cell.querySelector('.px-code-label');
+      if (showCodes.checked && cell.dataset.code) {
+        if (!c) { c = document.createElement('span'); c.className = 'px-code-label'; cell.appendChild(c); }
+        c.textContent = cell.dataset.code;
+        c.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:' + Math.max(6, px / 2.4) + 'px;color:rgba(0,0,0,.65);pointer-events:none';
+      } else if (c) c.remove();
+    });
+  };
+  showCodes.addEventListener('change', apply);
+  sizeInput.addEventListener('input', apply);
+  grid.addEventListener('mousemove', e => {
+    const cell = e.target.closest('.px');
+    if (!cell || !cell.dataset.code) { tip.style.display = 'none'; return; }
+    const key = cell.dataset.code;
+    tip.innerHTML = `色号 <b>${esc(key)}</b>`;
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top = (e.clientY + 14) + 'px';
+  });
+  grid.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  apply();
+}
+
+async function downloadZip() {
+  try {
+    const img = `/api/patterns/${P.id}/image`;
+    const meta = {
+      title: P.title, description: P.description, category: P.category_name,
+      difficulty: P.difficulty, size: [P.width, P.height], uid: P.author_uid
+    };
+    const form = new FormData();
+    form.append('meta', JSON.stringify(meta));
+    const resp = await fetch(img);
+    if (!resp.ok) throw new Error('图片获取失败');
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${P.title || 'pattern'}.png`;
+    a.click();
+    const b = document.createElement('a');
+    b.href = URL.createObjectURL(new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' }));
+    b.download = `${P.title || 'pattern'}_meta.json`;
+    b.click();
+    toast('图纸下载中（PNG + 信息）');
+  } catch (e) { toast('下载失败：' + e.message, 1); }
+}
+
+async function renderComments() {
+  const r = await API(`/patterns/${pid}/comments`);
+  const list = $('c-list');
+  if (!r.ok) return;
+  $('c-count').textContent = r.list.length;
+  list.innerHTML = r.list.length ? r.list.map(c => `
+    <div class="comment-item">
+      <div class="c-avatar">${esc(c.username.slice(0, 1).toUpperCase())}</div>
+      <div class="c-body">
+        <div class="c-head"><b>${esc(c.username)}</b><span class="c-uid">UID ${esc(c.uid)}</span><span>${fmtTime(c.created_at)}</span></div>
+        <div class="c-content">${esc(c.content)}</div>
+      </div>
+    </div>`).join('') : `<p style="color:#aaa;padding:16px 0">还没有评论，快来抢沙发～</p>`;
+  const form = $('c-form');
+  if (ME) {
+    form.innerHTML = `<div class="c-input-row"><textarea id="c-text" placeholder="写下你的评论…（最多 500 字）"></textarea><button class="btn primary" id="c-send" style="align-self:flex-end">发表</button></div>`;
+    $('c-send').onclick = async () => {
+      const content = $('c-text').value.trim();
+      if (!content) return toast('评论不能为空', 1);
+      const r2 = await API(`/patterns/${pid}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+      if (r2.ok) { toast('评论成功'); $('c-text').value = ''; renderComments(); }
+      else toast(r2.msg, 1);
+    };
+  } else {
+    form.innerHTML = `<p style="color:#8a90a2;font-size:13px;margin-bottom:12px">登录后才能评论。<a href="/login" style="color:var(--theme-color)">去登录</a></p>`;
+  }
+}
+
+loadCommon().then(() => loadDetail());
+</script>
+</body>
+</html>
